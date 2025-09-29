@@ -41,9 +41,6 @@ if (is_category()) {
     $post = $custom_page;
     setup_postdata($post);
     
-    // Вземаме body classes на страницата
-    $page_classes = get_body_class('', $custom_page_id);
-    
     // Проверяваме настройките за layout на страницата
     $page_layout = get_post_meta($custom_page_id, 'bloghash_page_layout', true);
     $sidebar_position = get_post_meta($custom_page_id, 'bloghash_sidebar_position', true);
@@ -57,24 +54,44 @@ if (is_category()) {
     
     // Определяме дали има sidebar
     $has_sidebar = false;
-    if (!$is_elementor_canvas && $sidebar_position !== 'no-sidebar' && !in_array('bloghash-no-sidebar', $page_classes)) {
-        $has_sidebar = true;
-    }
+    $sidebar_position_class = '';
     
-    // Добавяме класове за да симулираме страница вместо category
-    $wrapper_classes = array('category-as-page-wrapper');
-    
-    // Копираме важните класове от страницата
-    foreach ($page_classes as $class) {
-        if (strpos($class, 'bloghash-') === 0 || strpos($class, 'elementor') === 0) {
-            $wrapper_classes[] = $class;
+    if (!$is_elementor_canvas) {
+        // Проверяваме всички възможни настройки за sidebar
+        $body_classes = get_body_class('', $custom_page_id);
+        
+        if (in_array('bloghash-no-sidebar', $body_classes) || 
+            $sidebar_position === 'no-sidebar' || 
+            $page_layout === 'no-sidebar') {
+            $has_sidebar = false;
+        } else {
+            $has_sidebar = true;
+            // Определяме позицията на sidebar
+            if (in_array('bloghash-sidebar-position__left-sidebar', $body_classes) || $sidebar_position === 'left-sidebar') {
+                $sidebar_position_class = 'bloghash-sidebar-position__left-sidebar';
+            } else {
+                $sidebar_position_class = 'bloghash-sidebar-position__right-sidebar';
+            }
         }
     }
+    
+    // Определяме класовете за wrapper
+    $wrapper_classes = array('category-as-page-wrapper');
+    if (!$has_sidebar) {
+        $wrapper_classes[] = 'bloghash-no-sidebar';
+    }
+    if (!empty($sidebar_position_class)) {
+        $wrapper_classes[] = $sidebar_position_class;
+    }
+    
+    // Вземаме категорийна информация
+    $category = get_queried_object();
+    $show_category_header = ($category && isset($category->name) && !$is_elementor_canvas);
     ?>
     
     <style>
-    /* Премахваме category page header */
-    body.category .bloghash-page-header {
+    /* Премахваме стандартния page header за категории с custom страница */
+    body.category.category-has-custom-page .bloghash-page-header {
         display: none !important;
     }
     
@@ -101,13 +118,19 @@ if (is_category()) {
         line-height: 1.6;
     }
     
-    /* Важно: Презаписваме body classes за да работят CSS правилата на страницата */
+    /* Layout без sidebar - пълна ширина */
     .category-as-page-wrapper.bloghash-no-sidebar #primary {
         max-width: 100% !important;
+        width: 100% !important;
+        flex: 0 0 100% !important;
     }
     
-    .category-as-page-wrapper.bloghash-sidebar-style-2 #primary {
-        max-width: 70%;
+    /* Layout със sidebar */
+    .category-as-page-wrapper.bloghash-sidebar-position__right-sidebar #primary,
+    .category-as-page-wrapper.bloghash-sidebar-position__left-sidebar #primary {
+        max-width: 70% !important;
+        width: 70% !important;
+        flex: 0 0 70% !important;
     }
     
     /* За Elementor canvas */
@@ -120,12 +143,20 @@ if (is_category()) {
         max-width: 100%;
         padding: 0;
     }
+    
+    /* Responsive */
+    @media (max-width: 960px) {
+        .category-as-page-wrapper #primary {
+            max-width: 100% !important;
+            width: 100% !important;
+            flex: 0 0 100% !important;
+        }
+    }
     </style>
     
     <?php
-    // Категорийна информация
-    $category = get_queried_object();
-    if ($category && isset($category->name) && !$is_elementor_canvas) : 
+    // Показваме категорийно заглавие само ако не е Elementor Canvas
+    if ($show_category_header) : 
     ?>
         <div class="category-custom-header">
             <div class="bloghash-container">
@@ -141,14 +172,14 @@ if (is_category()) {
     
     <?php if ($is_elementor_canvas): ?>
         
-        <!-- Elementor Canvas - пълна ширина -->
-        <div class="<?php echo esc_attr(implode(' ', $wrapper_classes)); ?>">
+        <!-- Elementor Canvas - пълна ширина без container -->
+        <div class="<?php echo esc_attr(implode(' ', $wrapper_classes)); ?> elementor-template-canvas">
             <?php echo apply_filters('the_content', $custom_page->post_content); ?>
         </div>
         
     <?php else: ?>
         
-        <!-- Стандартен BlogHash layout с класове от страницата -->
+        <!-- Стандартен BlogHash layout -->
         <?php do_action( 'bloghash_before_container' ); ?>
 
         <div class="bloghash-container <?php echo esc_attr(implode(' ', $wrapper_classes)); ?>">
